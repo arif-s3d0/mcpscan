@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import sys
 from fastmcp import Client
+from fastmcp.client.transports import StreamableHttpTransport
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--host", help="Target host as ip:port, e.g. 172.17.0.2:8000")
@@ -13,13 +14,30 @@ parser.add_argument("--tool", nargs="+", metavar="ARG",
                          '(e.g. --tool execute_server_command command=date)')
 parser.add_argument("--encode", action="store_true",
                     help="URL-encode spaces (replace ' ' with %%20) in --resource and tool params")
+parser.add_argument("--header", dest="headers", action="append", metavar="Header",
+                    help='Add a request header, e.g. --header "Authorization: Bearer token" '
+                         '(can be specified multiple times)')
 args = parser.parse_args()
 
 if not args.host:
     parser.print_help()
     sys.exit(1)
 
-client = Client(f"http://{args.host}/mcp/")
+def parse_headers(raw_headers):
+    headers = {}
+    for h in (raw_headers or []):
+        if ":" not in h:
+            print(f"[-] Invalid header '{h}', expected 'Name: Value'")
+            sys.exit(1)
+        name, _, value = h.partition(":")
+        headers[name.strip()] = value.strip()
+    return headers
+
+transport = StreamableHttpTransport(
+    f"http://{args.host}/mcp",
+    headers=parse_headers(args.headers),
+)
+client = Client(transport)
 
 def enc(value):
     return value.replace(" ", "%20") if args.encode else value
